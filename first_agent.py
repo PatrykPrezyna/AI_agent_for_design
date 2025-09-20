@@ -1,19 +1,34 @@
+import os
 from openai import OpenAI
 
-# Initialize client with your API key (set it as an environment variable first!)
-client = OpenAI()
+# Load your API key from the environment variable
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def simple_agent(prompt):
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",   # lightweight, cheap model
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content
+def chat():
+    print("🤖 AI Agent ready! Type 'exit' to quit.\n")
+    messages = []  # keeps conversation memory
 
-print(simple_agent("Hello! What can you do?"))
+    while True:
+        user_input = input("You: ")
 
-assistant = client.beta.assistants.create(
-    name="My First Agent",
-    instructions="You are a helpful assistant that explains data science concepts.",
-    model="gpt-4o-mini"
-)
+        if user_input.lower() in ["exit", "quit", "q"]:
+            print("Agent: Goodbye! 👋")
+            break
+
+        # Add user message to conversation
+        messages.append({"role": "user", "content": user_input})
+
+        # Get response
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # fast & cost-efficient
+            messages=messages
+        )
+
+        answer = response.choices[0].message.content
+        print(f"Agent: {answer}\n")
+
+        # Add assistant response to conversation memory
+        messages.append({"role": "assistant", "content": answer})
+
+if __name__ == "__main__":
+    chat()
