@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Agent — Maintenance Demo</title>
+  <style>
+    :root{--bg:#f7f7f7;--card:#fff;--accent:#111;--muted:#666}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{background:var(--bg);display:flex;align-items:flex-start;justify-content:center;padding:28px}
+    .frame{width:1000px;max-width:100%;background:var(--card);box-shadow:0 8px 30px rgba(12,12,12,0.08);border-radius:10px;overflow:hidden}
+    header{padding:18px 22px;border-bottom:1px solid #eee;display:flex;gap:18px;align-items:center}
+    header h1{font-size:18px;margin:0}
+    .layout{display:flex;gap:18px;padding:20px}
+    .left{flex:1;display:flex;flex-direction:column;gap:16px}
+    .controls{display:flex;gap:8px;align-items:center}
+    button, .btn {background:#111;color:#fff;border:none;padding:10px 12px;border-radius:6px;cursor:pointer}
+    .btn.secondary{background:#fff;color:#111;border:1px solid #ddd}
+    .card{background:var(--card);border:1px solid #eee;padding:14px;border-radius:8px}
+    .dashboard{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .chart{height:170px;border:1px dashed #ddd;border-radius:6px;display:flex;align-items:center;justify-content:center}
+    /* right column */
+    .right{width:360px;display:flex;flex-direction:column;gap:12px}
+    .chat-window{height:520px;border-radius:8px;border:1px solid #eee;background:linear-gradient(90deg,#fff,#fbfbfb);display:flex;flex-direction:column;overflow:hidden}
+    .messages{flex:1;padding:12px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+    .msg{max-width:78%;padding:10px;border-radius:10px}
+    .msg.user{align-self:flex-end;background:#111;color:#fff}
+    .msg.agent{align-self:flex-start;background:#f3f3f3;color:#111;border:1px solid #eee}
+    .input-row{display:flex;padding:10px;border-top:1px solid #eee}
+    input[type=text]{flex:1;padding:10px;border:1px solid #ddd;border-radius:6px;margin-right:8px}
+    .small{font-size:13px;color:var(--muted)}
+    .badge{display:inline-block;padding:6px 8px;border-radius:999px;border:1px solid #eee;background:#fff;font-size:12px}
+    footer{padding:12px 22px;border-top:1px solid #eee;font-size:13px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="frame" role="application">
+    <header>
+      <h1>Maintenance AI — Demo</h1>
+      <div class="small">Simulated demo: engineer uploads measurements → AI agent analyzes</div>
+    </header>
+    <div class="layout">
+      <div class="left">
+        <div class="card">
+          <strong>Dashboard</strong>
+          <div class="dashboard" style="margin-top:10px">
+            <div class="card">
+              <div class="small">Key metric</div>
+              <div id="key-metric" style="font-size:22px;margin-top:6px">—</div>
+            </div>
+            <div class="card">
+              <div class="small">Status</div>
+              <div id="status" style="font-size:22px;margin-top:6px">idle</div>
+            </div>
+            <div class="card" style="grid-column:1/3">
+              <div class="small">Analysis chart</div>
+              <canvas id="chart" class="chart" width="800" height="170"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <strong>Measurements</strong>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <input id="file" type="file" accept=".csv" />
+            <button class="btn" id="btn-sim">Use sample data</button>
+            <button class="btn secondary" id="btn-clear">Clear</button>
+          </div>
+          <div id="file-info" class="small" style="margin-top:10px">No file loaded.</div>
+          <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+            <button class="btn" id="analyze">Analyze with AI</button>
+            <div class="small">Processing will be simulated locally.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="card" style="display:flex;align-items:center;justify-content:space-between">
+          <div><strong>AI Agent</strong><div class="small">Agent: Maintenance Analyst v0.1</div></div>
+          <div class="small">Model: local demo</div>
+        </div>
+
+        <div class="chat-window" role="region" aria-label="Agent chat">
+          <div class="messages" id="messages">
+            <div class="msg agent">Hi — I can analyze measurements and suggest root causes. Upload data or try sample.</div>
+          </div>
+          <div class="input-row">
+            <input type="text" id="uinput" placeholder="Type to the agent..." />
+            <button class="btn" id="send">Send</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Actions</strong><div class="small">Quick automation toggles</div></div>
+            <div><label><input type="checkbox" id="autoMode" /> Auto-apply suggestions</label></div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <button class="btn" id="apply">Apply fix (sim)</button>
+            <button class="btn secondary" id="reset">Reset demo</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <footer>Open this HTML file in your browser. This demo simulates an AI agent workflow — no external servers needed.</footer>
+  </div>
+
+  <script>
+    // Tiny demo logic: parse CSV where first column is timestamp, second is value
+    let data = [];
+    const fileInput = document.getElementById('file');
+    const fileInfo = document.getElementById('file-info');
+    const messages = document.getElementById('messages');
+    const keyMetric = document.getElementById('key-metric');
+    const status = document.getElementById('status');
+    const chart = document.getElementById('chart');
+    const ctx = chart.getContext('2d');
+
+    function appendMsg(text, who='agent'){
+      const d = document.createElement('div'); d.className = 'msg ' + (who==='user'?'user':'agent'); d.textContent = text; messages.appendChild(d); messages.scrollTop = messages.scrollHeight;
+    }
+
+    fileInput.addEventListener('change', async (e)=>{
+      const f = e.target.files[0];
+      if(!f) return;
+      fileInfo.textContent = 'Loaded: ' + f.name;
+      const txt = await f.text();
+      parseCsv(txt);
+    });
+
+    document.getElementById('btn-sim').addEventListener('click', ()=>{
+      // simple synthetic data
+      const csv = 't,value\n' + Array.from({length:30}).map((_,i)=>`${i},${(Math.sin(i/4)*10+50+Math.random()*6).toFixed(2)}`).join('\n');
+      parseCsv(csv);
+      fileInfo.textContent = 'Loaded: sample-data.csv';
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', ()=>{
+      data = []; fileInfo.textContent = 'No file loaded.'; renderDashboard(); appendMsg('Cleared loaded data.','agent');
+    });
+
+    function parseCsv(text){
+      const lines = text.trim().split(/[\r\n]+/).filter(Boolean);
+      const parsed = [];
+      for(let i=1;i<lines.length;i++){ const parts = lines[i].split(/,|;|\t/).map(s=>s.trim()); if(parts.length<2) continue; parsed.push({t:parts[0],v:parseFloat(parts[1])}); }
+      data = parsed;
+      renderDashboard(); appendMsg('Data loaded: ' + data.length + ' rows.','agent');
+    }
+
+    function renderDashboard(){
+      // metric: average
+      if(!data || data.length===0){ keyMetric.textContent = '—'; status.textContent='idle'; drawEmpty(); return; }
+      const avg = data.reduce((s,x)=>s+x.v,0)/data.length;
+      keyMetric.textContent = avg.toFixed(2);
+      status.textContent = 'ready';
+      drawChart(data.map(x=>x.v));
+    }
+
+    function drawEmpty(){ ctx.clearRect(0,0,chart.width,chart.height); ctx.font='14px sans-serif'; ctx.fillStyle='#666'; ctx.fillText('No data to display', 10, 28); }
+
+    function drawChart(values){ ctx.clearRect(0,0,chart.width,chart.height); const w = chart.width, h = chart.height; const padding=18; const max=Math.max(...values), min=Math.min(...values); const range = max-min || 1;
+      ctx.beginPath(); values.forEach((v,i)=>{ const x = padding + i*( (w-2*padding)/(values.length-1) ); const y = h-padding - ( (v-min)/range )*(h-2*padding); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.lineWidth=2; ctx.strokeStyle='#111'; ctx.stroke();
+    }
+
+    document.getElementById('analyze').addEventListener('click', async ()=>{
+      if(!data || !data.length){ appendMsg('No data loaded to analyze. Try sample.', 'agent'); return; }
+      status.textContent='processing'; appendMsg('Starting analysis...','agent');
+      // simulate processing steps with messages
+      await simulateStep('Cleaning data');
+      await simulateStep('Feature extraction');
+      await simulateStep('Running predictive model');
+      // create a fake result
+      const avg = data.reduce((s,x)=>s+x.v,0)/data.length;
+      const anomaly = data.find(d=>d.v > avg + 8);
+      const result = anomaly ? `Detected anomaly at t=${anomaly.t} (value=${anomaly.v.toFixed(2)}). Likely cause: sensor drift / sampling error.` : 'No single-point anomaly found; overall trend within expected range.';
+      appendMsg('Analysis complete — ' + result, 'agent');
+      status.textContent='done';
+    });
+
+    function simulateStep(msg){ return new Promise(res=>{ appendMsg(msg+'...', 'agent'); setTimeout(()=>{ appendMsg(msg+' done.','agent'); res(); }, 700 + Math.random()*900); }); }
+
+    // chat input
+    document.getElementById('send').addEventListener('click', ()=>{ const val = document.getElementById('uinput').value.trim(); if(!val) return; appendMsg(val,'user'); document.getElementById('uinput').value=''; handleUserMessage(val); });
+    document.getElementById('uinput').addEventListener('keypress', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('send').click(); } });
+
+    function handleUserMessage(text){ appendMsg('Hmm… let me check that with the measurements.', 'agent'); setTimeout(()=>{ if(text.toLowerCase().includes('anomaly')) appendMsg('I can search for anomalies. Click Analyze to run the pipeline.', 'agent'); else if(text.toLowerCase().includes('how')) appendMsg('Upload a CSV with columns [time,value]. I will compute metrics and detect anomalies.', 'agent'); else appendMsg('You can upload measurement CSV, then press Analyze. I will summarize results and propose fixes.', 'agent'); }, 800);
+    }
+
+    // apply fix simulation
+    document.getElementById('apply').addEventListener('click', ()=>{
+      appendMsg('Applying recommended fix (simulation)...','agent'); setTimeout(()=>{ appendMsg('Fix applied — downtime reduced by 12% (simulated).','agent'); },900);
+    });
+
+    document.getElementById('reset').addEventListener('click', ()=>{ data=[]; fileInfo.textContent='No file loaded.'; renderDashboard(); messages.innerHTML=''; appendMsg('Demo reset. Upload data to begin.','agent'); });
+
+    // initial draw
+    drawEmpty();
+  </script>
+</body>
+</html>
